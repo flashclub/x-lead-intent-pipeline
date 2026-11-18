@@ -61,6 +61,7 @@ app = FastAPI(title="x-lead-miner intent service")
 
 class ScoreRequest(BaseModel):
     texts: list[str]
+    per_item: bool = False  # score each text separately & report per-text latency
 
 
 @app.get("/health")
@@ -75,16 +76,28 @@ def health() -> dict:
 @app.post("/score")
 def score(request: ScoreRequest) -> dict:
     t0 = time.perf_counter()
-    if not request.texts:
-        return {"scores": [], "model": EMBED_MODEL, "elapsed_sec": 0.0}
-    with torch.no_grad():
-        features = torch.tensor(
-            embedder.encode([t[:1500] for t in request.texts], normalize_embeddings=True)
-        )
-        logits = head(features).squeeze(-1)
-        scores = torch.sigmoid(logits).tolist()
+    times_sec: list[float] = []
+    if request.per_item:
+        # true per-post latency: encode each text individually
+        scores = []
+        for t in request.texts:
+            t1 = time.perf_counter()
+            with torch.no_grad():
+                emb = torch.tensor(
+                    embedder.encode([t[:1500]], normalize_embeddings=True)
+                )
+                scores.append(float(torch.sigmoid(head(emb)).item()))
+            times_sec.append(round(time.perf_counter() - t1, 6))
+    else:
+        with torch.no_grad():
+            features = torch.tensor(
+                embedder.encode([t[:1500] for t in request.texts], normalize_embeddings=True)
+            )
+            logits = head(features).squeeze(-1)
+            scores = torch.sigmoid(logits).tolist()
     return {
         "scores": [round(float(s), 4) for s in scores],
+        "times_sec": times_sec,
         "model": EMBED_MODEL,
         "elapsed_sec": round(time.perf_counter() - t0, 6),
     }

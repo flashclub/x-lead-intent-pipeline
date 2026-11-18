@@ -1,0 +1,4 @@
+torch
+sentence-transformers
+gradio
+huggingface_hub
