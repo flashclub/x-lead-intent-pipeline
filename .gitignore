@@ -1,0 +1,6 @@
+__pycache__/
+.venv/
+*.log
+data/posts_10k.jsonl
+data/labeled.jsonl
+data/labeled_10k.jsonl

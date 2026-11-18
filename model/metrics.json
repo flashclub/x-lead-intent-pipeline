@@ -1,0 +1,16 @@
+{
+  "dim": 768,
+  "n_train": 5508,
+  "n_val": 1179,
+  "n_test": 1179,
+  "val_precision_at_5": 1.0,
+  "val_precision_at_10": 1.0,
+  "val_accuracy_at_0.5": 0.8888888955116272,
+  "test_precision_at_5": 1.0,
+  "test_precision_at_10": 1.0,
+  "test_accuracy_at_0.5": 0.8770143985748291,
+  "model": "google/embeddinggemma-2 (frozen) + MLP 768-64-1",
+  "n_intent": 2850,
+  "epochs": 40,
+  "trained_with_seed": 7
+}
