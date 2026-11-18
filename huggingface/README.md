@@ -55,4 +55,5 @@ print(score)  # 0.82
 ```
 
 Trained on 7,866 X posts (2,850 intent) distilled from a Gemini teacher.
+Dataset: https://huggingface.co/datasets/flashcoder/tweet-buy-intent-leads
 Pipeline: github.com/flashclub/x-lead-intent-pipeline
