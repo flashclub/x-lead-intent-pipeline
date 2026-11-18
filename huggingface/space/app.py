@@ -4,7 +4,7 @@ from huggingface_hub import hf_hub_download
 from sentence_transformers import SentenceTransformer
 
 EMBED_MODEL = "google/embeddinggemma-2"
-REPO_ID = "flashclub/tweet-buy-intent"
+REPO_ID = "flashcoder/tweet-buy-intent"
 
 embedder = SentenceTransformer(EMBED_MODEL, device="cpu",
                                model_kwargs={"dtype": torch.float32})

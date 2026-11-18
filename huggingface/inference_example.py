@@ -6,7 +6,7 @@ embedder = SentenceTransformer("google/embeddinggemma-2", device="cpu",
                                model_kwargs={"dtype": torch.float32})
 head = torch.nn.Sequential(
     torch.nn.Linear(768, 64), torch.nn.ReLU(), torch.nn.Dropout(0.2), torch.nn.Linear(64, 1))
-head.load_state_dict(torch.load(hf_hub_download("flashclub/tweet-buy-intent", "head.pt"),
+head.load_state_dict(torch.load(hf_hub_download("flashcoder/tweet-buy-intent", "head.pt"),
                                 map_location="cpu"))
 head.eval()
 
