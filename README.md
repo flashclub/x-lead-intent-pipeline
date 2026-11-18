@@ -66,9 +66,10 @@ A pre-trained head (`model/head.pt`, 199 KB) + `model/metrics.json` are
 included so step 3 is optional: the embedder downloads from Hugging Face on
 first run (~1.5 GB), everything else runs on CPU.
 
-`data/sample_labeled_240.jsonl` is an anonymized sample (handles/ids stripped)
-of the full labeled dataset so you can inspect the label distribution without
-scraping anything.
+**`data/labeled_full_7866.jsonl`** — the full labeled dataset (3.9 MB,
+anonymized: handles/ids stripped, text verbatim) is committed, so every
+number in this README is reproducible from the repo without scraping.
+`data/sample_labeled_240.jsonl` is a small quick-look subset.
 
 ## API
 
