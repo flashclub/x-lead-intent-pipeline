@@ -1,0 +1,19 @@
+{
+  "adapters": [
+    {
+      "name": "lead-miner-sidecar (gemma-2, local)",
+      "type": "sidecar",
+      "base_url": "http://127.0.0.1:5019"
+    },
+    {
+      "name": "jev-api (待接入)",
+      "type": "jev",
+      "base_url": "https://api.typesafe.ai",
+      "api_key_env": "JEV_API_KEY",
+      "model": "jev-1",
+      "question": "Does this X post express buying intent for a product, tool, app or service? Answer yes or no.",
+      "probability_path": "probability",
+      "timeout": 60
+    }
+  ]
+}
