@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>从零训练一个 49K 参数的文本分类器：PyTorch 小模型完全指南</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: #0d1117; color: #c9d1d9; line-height: 1.85; font-size: 16px;
+  }
+  .container { max-width: 820px; margin: 40px auto; padding: 40px 32px; }
+  h1 { font-size: 28px; font-weight: 700; line-height: 1.35; margin-bottom: 8px; color: #e6edf3; }
+  .subtitle { color: #8b949e; font-size: 16px; margin-bottom: 36px; }
+  h2 {
+    font-size: 22px; font-weight: 700; margin: 48px 0 20px; color: #e6edf3;
+    padding-bottom: 8px; border-bottom: 1px solid #21262d;
+  }
+  h3 { font-size: 18px; font-weight: 600; margin: 28px 0 12px; color: #e6edf3; }
+  p { margin: 0 0 16px; color: #c9d1d9; }
+  code {
+    background: #161b22; padding: 2px 6px; border-radius: 4px;
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 14px; color: #79c0ff;
+  }
+  pre {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 18px 20px; overflow-x: auto; margin: 16px 0 20px;
+  }
+  pre code {
+    background: none; padding: 0; color: #c9d1d9;
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 14px; line-height: 1.6;
+  }
+  strong { color: #e6edf3; font-weight: 600; }
+  em { color: #79c0ff; font-style: normal; }
+  table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+  th { background: #161b22; color: #e6edf3; font-weight: 600; text-align: left; padding: 10px 14px; border: 1px solid #30363d; }
+  td { padding: 10px 14px; border: 1px solid #21262d; color: #c9d1d9; }
+  .tip {
+    background: #0d2137; border: 1px solid #1f6feb; border-radius: 8px;
+    padding: 14px 18px; margin: 20px 0; font-size: 15px;
+  }
+  .tip strong { color: #79c0ff; }
+  .warn {
+    background: #2d1b00; border: 1px solid #9e6a03; border-radius: 8px;
+    padding: 14px 18px; margin: 20px 0; font-size: 15px;
+  }
+  .warn strong { color: #d29922; }
+  blockquote {
+    border-left: 3px solid #d4a24e; padding: 10px 16px; margin: 16px 0;
+    color: #8b949e; font-size: 15px;
+  }
+  .step-num {
+    display: inline-block; background: #d4a24e; color: #0d1117;
+    width: 28px; height: 28px; line-height: 28px; text-align: center;
+    border-radius: 50%; font-weight: 700; font-size: 15px; margin-right: 8px;
+  }
+  .metric-good { color: #3fb950; font-weight: 600; }
+  .metric-bad { color: #f85149; font-weight: 600; }
+  a { color: #79c0ff; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>从零训练一个 49K 参数的文本分类器：PyTorch 小模型完全指南</h1>
+
+<p class="subtitle">不微调大模型、不调用 API、不需要 GPU——只用 PyTorch 和 7,866 条文本，训练一个能在 CPU 上 0.1 秒完成推断的二分类器</p>
+
+<h2>你要做什么</h2>
+
+<p>给 X（Twitter）帖子打一个 0-1 的购买意向分：判断发帖的人是在<strong>找东西买</strong>，还是在<strong>找东西消遣</strong>。</p>
+
+<p>输入是一段文本（帖子内容），输出是一个 0 到 1 的分数——越接近 1，发帖人越可能在找产品买。</p>
+
+<p>底座是一个冻结的嵌入模型（Google 的 embeddinggemma-2），它把任何文本压缩成 768 维向量。我们<strong>不训练</strong>这 740M 参数——它是 Google 用海量数据预训练好的"语义压缩器"，直接用。</p>
+
+<p>我们只训练一个 <strong>49,281 个参数的 MLP 头</strong>：768 → 64 → 1。这个头的工作是在 768 维的语义空间里画一条分界线——线的一边是"要买东西的人"，另一边是"找东西消遣的人"。</p>
+
+<h2>前置知识</h2>
+
+<p>你只需要会 Python 和 PyTorch 基础（会写 <code>nn.Linear</code> 和 <code>optimizer.step()</code>）。不需要 GPU，不需要机器学习背景。</p>
+
+<div class="tip">💡 本文所有代码来自一个真实上线运行的项目（X Lead Miner），不是教学 toy example。数据集、超参数、每一个坑都是实际踩过的。</div>
+
+<h2>第 1 步：数据准备</h2>
+
+<p>数据格式是 JSONL，每行一条帖子：</p>
+
+<pre><code>{"text": "is there an app that tracks competitor pricing daily?", "label": {"intent": true, "type": "recommend_request", "confidence": 1.0}}</code></pre>
+
+<p>共 7,866 条（2,850 条意向 / 5,016 条噪音）。标注来自 Gemini 2.5 Flash（teacher），提示词里写死了正反锚定示例：</p>
+
+<pre><code>✓ true: "anyone recommend a CRM for my agency"
+✓ true: "wish an app tracked my subscriptions"
+✗ false: "recommend me some anime"
+✗ false: "recommend a good youtuber"</code></pre>
+
+<p>锚定示例是 teacher 质量的关键。没有它，Gemini 会把"求推荐动漫"也标为 true——因为两者都含 "recommend"，但商业含义完全不同。</p>
+
+<div class="warn">⚠️ 第一版提示词没有锚定示例，导致 41 条"求推荐动漫/书籍"被标为 true。先审计 teacher，再训练模型。</div>
+
+<h3>数据清洗与去重</h3>
+
+<pre><code>def load_dataset(path):
+    rows, seen = [], set()
+    for line in open(path, encoding="utf-8"):   # 只按 \n 迭代，不用 splitlines()
+        if not line.strip():
+            continue
+        try:
+            r = json.loads(line)
+        except json.JSONDecodeError:
+            continue                             # 容忍撕裂行
+        rid = str(r.get("id") or f"row-{len(rows)}")  # 匿名数据合成 id
+        if rid in seen:
+            continue                             # 去重
+        seen.add(rid)
+        label = r.get("label")
+        if isinstance(label, dict) and isinstance(label.get("intent"), bool) and len(r["text"]) >= 20:
+            rows.append(r)
+    texts = [r["text"] for r in rows]
+    labels = [1 if r["label"]["intent"] else 0 for r in rows]
+    return texts, labels</code></pre>
+
+<div class="tip">🪤 陷阱：X 帖子含有 <code>U+2028</code>（Unicode 行分隔符）。<code>str.splitlines()</code> 会按它切分字符串，导致 JSONL 行被撕成碎片、解析失败、<strong>静默跳过</strong>——你不会看到任何报错。永远按文件对象迭代（只按 \n 切）。</div>
+
+<h3>三路分层切分</h3>
+
+<pre><code>def stratified_split(labels, frac=0.15, seed=7):
+    """切成 train / val / test 三份。test 从不参与训练和早停。"""
+    rng = random.Random(seed)
+    by_class = {}
+    for i, y in enumerate(labels):
+        by_class.setdefault(y, []).append(i)
+    val, test = set(), set()
+    for indices in by_class.values():
+        rng.shuffle(indices)
+        n = max(1, int(len(indices) * frac))
+        val.update(indices[:n])
+        test.update(indices[n : n * 2])
+    train = [i for i in range(len(labels)) if i not in val and i not in test]
+    return train, sorted(val), sorted(test)</code></pre>
+
+<div class="warn">⚠️ 另一个陷阱：如果 JSONL 有重复 id（追加写入导致的），同一条帖子会同时出现在 train 和 test 里——模型只是"背住了"这条帖子。必须按 id 去重后再切分。</div>
+
+<h2>第 2 步：模型定义</h2>
+
+<pre><code>import torch
+from torch import nn
+
+class IntentHead(nn.Module):
+    def __init__(self, input_dim=768, hidden=64):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, hidden),  # 768 → 64（49,152 + 64 参数）
+            nn.ReLU(),
+            nn.Dropout(0.2),               # 防过拟合（小数据集必须）
+            nn.Linear(hidden, 1),          # 64 → 1（64 + 1 参数）
+        )
+
+    def forward(self, x):
+        return self.net(x).squeeze(-1)     # (batch,) 而非 (batch, 1)</code></pre>
+
+<p>总参数：<strong>49,281</strong>。模型文件保存后 <strong>199KB</strong>（fp32）。</p>
+
+<p>为什么 49k 参数就够了？因为底座已经把 7.4 亿参数的"理解语言"压缩成了 768 维的语义向量——你只需要在这 768 维的空间里画一条分界线。这条线的几何复杂度很低（近似线性），49k 参数绰绰有余。</p>
+
+<h2>第 3 步：嵌入编码</h2>
+
+<p>用冻结的嵌入模型把文本转成 768 维向量。这一步只需要跑一次（结果缓存到磁盘），后续训练和推理都用缓存。</p>
+
+<pre><code>from sentence_transformers import SentenceTransformer
+import torch
+
+embedder = SentenceTransformer(
+    "google/embeddinggemma-2",       # 或 BAAI/bge-base-en-v1.5（更小更快）
+    device="cpu",
+    model_kwargs={"dtype": torch.float32},
+)
+
+# 关键：normalize_embeddings=True
+# 这让所有向量变成单位向量（L2 范数 = 1），
+# 使得余弦相似度等价于点积——对下游的线性层很重要。
+features = torch.tensor(
+    embedder.encode(texts, normalize_embeddings=True)
+)
+# shape: (n_texts, 768)</code></pre>
+
+<div class="tip">⏱ 编码是训练流程中最慢的一步（7,866 条 × fp32 CPU ≈ 10-30 分钟）。结果缓存后，后续训练只需几秒。</div>
+
+<h2>第 4 步：训练循环</h2>
+
+<p>这是整篇教程的核心。<strong>99% 的教程不会告诉你这一步</strong>——但恰恰是这一步决定了模型的生死。</p>
+
+<h3>反例：为什么 30 步全批量训练不够</h3>
+
+<p>最初版本的训练代码长这样：</p>
+
+<pre><code>for epoch in range(30):
+    optimizer.zero_grad()
+    loss = loss_fn(head(x_train).squeeze(-1), y_train)  # 全批量
+    loss.backward()
+    optimizer.step()</code></pre>
+
+<p>看起来完全合理——标准的 PyTorch 训练循环。但它有一个致命问题：<strong>全批量训练每轮只走 1 次梯度更新，30 轮 = 30 次</strong>。一个 49k 参数的模型从随机初始化到收敛，30 步远远不够。</p>
+
+<p>实测结果：所有帖子的分数挤在 0.25-0.40 的窄带里，accuracy = 75.8%（恰好等于"全预测为负"的基线）——模型实际上什么都没学到。</p>
+
+<div class="warn">🪤 教训：梯度更新次数 = epochs × (n_samples / batch_size)。全批量 30 epochs 只有 30 步。改成 batch=16 后，30 epochs 产生约 6,000 步——差了 200 倍。</div>
+
+<h3>正确的训练循环</h3>
+
+<pre><code>torch.manual_seed(7)
+head = IntentHead(768)
+optimizer = torch.optim.Adam(head.parameters(), lr=1e-3)
+loss_fn = nn.BCEWithLogitsLoss()
+
+generator = torch.Generator().manual_seed(7)
+best_val_loss = float("inf")
+best_state = None
+stale = 0
+
+for epoch in range(200):  # 上限 200，早停会提前结束
+    head.train()
+    perm = torch.randperm(len(x_train), generator=generator)
+    for start in range(0, len(perm), 16):  # batch=16
+        idx = perm[start : start + 16]
+        optimizer.zero_grad()
+        loss = loss_fn(head(x_train[idx]).squeeze(-1), y_train[idx])
+        loss.backward()
+        optimizer.step()
+
+    head.eval()
+    with torch.no_grad():
+        val_loss = float(loss_fn(head(x_val).squeeze(-1), y_val))
+
+    if val_loss < best_val_loss - 1e-4:
+        best_val_loss = val_loss
+        best_state = {k: v.clone() for k, v in head.state_dict().items()}
+        stale = 0
+    else:
+        stale += 1
+        if stale >= 20:  # 20 轮没进步就停
+            break
+
+if best_state:
+    head.load_state_dict(best_state)  # 恢复 val_loss 最低的那组权重</code></pre>
+
+<p>三个关键设计：</p>
+
+<p><strong>mini-batch</strong>：每轮 5,508/16 ≈ 345 步 × 数百轮 = 数万步梯度更新（修复前只有 30 步）。</p>
+
+<p><strong>早停 + 最优权重恢复</strong>：不是保存"最后一轮"的权重，而是保存"val_loss 最低"的那组。因为过了最优解后 train_loss 会继续降（过拟合），但 val_loss 开始升高——最后一轮不是最好的。</p>
+
+<p><strong>Dropout(0.2)</strong>：只在 train 模式生效，eval 时自动关闭。防止 49k 参数在 5k 样本上过拟合。</p>
+
+<h2>第 5 步：评估</h2>
+
+<p>不要只看 accuracy——在一个不平衡数据集上，accuracy 会被多数类绑架。需要看多个指标：</p>
+
+<pre><code>head.eval()
+with torch.no_grad():
+    val_scores = torch.sigmoid(head(x_val).squeeze(-1))
+    test_scores = torch.sigmoid(head(x_test).squeeze(-1))
+
+def precision_at_k(scores, labels, k):
+    top = torch.argsort(scores, descending=True)[:k]
+    return float(labels[top].float().mean())
+
+for name, sc, lb in [
+    ("val",  val_scores,  y_val),
+    ("test", test_scores, y_test),
+]:
+    print(f"{name}: p@5={precision_at_k(sc, lb, 5):.2f} "
+          f"p@10={precision_at_k(sc, lb, 10):.2f} "
+          f"acc={((sc > 0.5) == lb.bool()).float().mean():.3f}")</code></pre>
+
+<div class="tip">📌 precision@k 比 accuracy 更重要：产品只展示排名靠前的帖子，你不在乎排名尾部的准确率，只在乎"排在前面的到底准不准"。</div>
+
+<h2>第 6 步：部署</h2>
+
+<p>两种方式，按运行环境选择：</p>
+
+<p><strong>方式 A：FastAPI sidecar</strong>（需要 Python 进程）</p>
+
+<pre><code>from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.post("/score")
+def score(request: ScoreRequest):
+    features = torch.tensor(embedder.encode(
+        [t[:1500] for t in request.texts], normalize_embeddings=True
+    ))
+    logits = head(features).squeeze(-1)
+    return {"scores": torch.sigmoid(logits).tolist()}</code></pre>
+
+<p><strong>方式 B：Worker 内置权重</strong>（无 Python 进程，边缘推理）</p>
+
+<p>把训练好的权重导出为 JSON，直接嵌入 Worker 代码——推理时不需要加载任何模型文件。</p>
+
+<pre><code>// 导出权重（Python 端执行一次）
+import json
+sd = head.state_dict()
+json.dump({
+    "w1": sd["0.weight"].tolist(),  # (64, 768)
+    "b1": sd["0.bias"].tolist(),
+    "w2": sd["3.weight"].tolist(),  # (1, 64)
+    "b2": sd["3.bias"].tolist(),
+}, open("intent-head-weights.json", "w"))</code></pre>
+
+<pre><code>// Worker 端：纯 JS 矩阵运算，零依赖
+const hidden = W.b1.map((b, j) => {
+  let acc = b;
+  const row = W.w1[j];
+  for (let i = 0; i < emb.length; i++) acc += emb[i] * row[i];
+  return Math.max(0, acc);  // ReLU
+});
+let logit = W.b2[0];
+for (let j = 0; j < hidden.length; j++) logit += hidden[j] * W.w2[0][j];
+const score = 1 / (1 + Math.exp(-logit));  // sigmoid</code></pre>
+
+<h2>常见坑</h2>
+
+<table>
+<tr><th>坑</th><th>症状</th><th>根因</th><th>修复</th></tr>
+<tr><td>梯度更新次数不足</td><td>全部分数挤在窄带，accuracy = 多数类基线</td><td>全批量 × 少 epochs = 极少梯度步</td><td>mini-batch + 更多 epochs + 早停</td></tr>
+<tr><td>teacher 标签噪声</td><td>模型学到表面模式（如"含 recommend = true"）</td><td>teacher 提示词缺少排除条件</td><td>显式正反锚定示例写入提示词</td></tr>
+<tr><td>U+2028 数据丢失</td><td>12 条帖子在所有代码路径中不可见</td><td>str.splitlines() 按 Unicode 行分隔符切分</td><td>文件对象迭代，不用 splitlines()</td></tr>
+<tr><td>train/test 泄漏</td><td>重复帖子同时出现在两边</td><td>JSONL 追加写入产生重复 id</td><td>按 id 去重后再切分</td></tr>
+<tr><td>过拟合</td><td>train_loss ≈ 0 但 val_loss 上升</td><td>模型太大 / 数据太少 / 训练太久</td><td>Dropout + 早停 + 最优权重恢复</td></tr>
+</table>
+
+<h2>结果</h2>
+
+<p>在这套流程下（7,866 条标注，2,850 正 / 5,016 负），我们的最终模型：</p>
+
+<table>
+<tr><th>指标</th><th>验证集</th><th>测试集</th></tr>
+<tr><td>precision@5</td><td>1.00</td><td>1.00</td></tr>
+<tr><td>precision@10</td><td>1.00</td><td>0.70</td></tr>
+<tr><td>accuracy</td><td>0.889</td><td>0.877</td></tr>
+<tr><td>推理延迟（单条）</td><td colspan="2">0.07-0.25s（CPU fp32）</td></tr>
+</table>
+
+<p>线上实测判别：</p>
+
+<table>
+<tr><th>帖子</th><th>分数</th><th>判定</th></tr>
+<tr><td>"would pay for a pricing-tracking tool"</td><td class="good">0.9964</td><td>强意向 ✅</td></tr>
+<tr><td>"just watched the new Dune movie"</td><td class="bad">0.0162</td><td>噪音 ✅</td></tr>
+<tr><td>"recommend me some cool youtubers"</td><td class="bad">0.0002</td><td>噪音 ✅</td></tr>
+</table>
+
+<p>完整的管线代码、数据集和预训练权重都在 GitHub 上开源：<br>
+github.com/flashclub/x-lead-intent-pipeline</p>
+
+</div>
+</body>
+</html>
