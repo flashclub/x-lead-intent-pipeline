@@ -119,7 +119,23 @@ class JevApiAdapter(DecisionModel):
         self.timeout = timeout
         self.api_key = os.environ.get(api_key_env, "")
 
+    CRITERIA = {
+        "true": "the author is looking to buy, adopt, or pay for a product, tool, app or service",
+        "false": "content consumption, chatter, praise, or news with no purchase intent",
+    }
+
     def score(self, texts: list[str]) -> ScoreBatch:
+        """Real TypeSafe System One protocol (verified 2026-11-20):
+
+        POST {base_url}/systemone
+        {"model": ..., "state": <text>,
+         "questions": {"buy_intent": {"type": "noul", "question": ...,
+                       "criteria": {"true": ..., "false": ...}}}}
+        -> {"answers": {"buy_intent": {"type": "noul", "noul": 0.93}}}
+
+        `noul` is P(buy-intent=true) — polarity verified: strong-intent
+        post scores 0.93, noise post 0.08. One text per request.
+        """
         scores: list[float] = []
         latencies: list[float] = []
         raw: list[dict] = []
@@ -129,15 +145,25 @@ class JevApiAdapter(DecisionModel):
         for text in texts:
             t0 = time.perf_counter()
             data = _post_json(
-                f"{self.base_url}/v1/systemone",
-                {"text": text[:1500], "question": self.question},
+                f"{self.base_url}/systemone",
+                {
+                    "model": self.model,
+                    "state": text[:1500],
+                    "questions": {
+                        "buy_intent": {
+                            "type": "noul",
+                            "question": self.question,
+                            "criteria": self.CRITERIA,
+                        }
+                    },
+                },
                 headers,
                 timeout=self.timeout,
             )
-            prob = float(_dig(data, self.probability_path))
+            prob = float(_dig(data, self.probability_path))  # answers.buy_intent.noul
             scores.append(prob)
             latencies.append(time.perf_counter() - t0)
-            raw.append({"source": self.base_url})
+            raw.append({"source": self.base_url, "served_model": data.get("model")})
         return ScoreBatch(scores=scores, latencies=latencies, raw=raw)
 
 

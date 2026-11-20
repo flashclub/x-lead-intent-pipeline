@@ -1,18 +1,18 @@
 {
   "adapters": [
     {
-      "name": "lead-miner-sidecar (gemma-2, local)",
+      "name": "lead-miner head (bge-base, 49k, local)",
       "type": "sidecar",
       "base_url": "http://127.0.0.1:5019"
     },
     {
-      "name": "jev-api (待接入)",
+      "name": "Jev (typesafe api, jev-latest)",
       "type": "jev",
-      "base_url": "https://api.typesafe.ai",
-      "api_key_env": "JEV_API_KEY",
-      "model": "jev-1",
+      "base_url": "https://api.typesafe.ai/v1",
+      "api_key_env": "JEV_KEY",
+      "model": "jev-latest",
       "question": "Does this X post express buying intent for a product, tool, app or service? Answer yes or no.",
-      "probability_path": "probability",
+      "probability_path": "answers.buy_intent.noul",
       "timeout": 60
     }
   ]

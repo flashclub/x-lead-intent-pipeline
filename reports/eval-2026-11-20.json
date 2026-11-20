@@ -1,0 +1,191 @@
+{
+  "date": "2026-11-20",
+  "dataset": "labeled_full_7866.jsonl",
+  "n": 300,
+  "n_intent": 96,
+  "models": {
+    "lead-miner head (bge-base, 49k, local)": {
+      "n": 300,
+      "threshold": 0.5,
+      "tp": 84,
+      "fp": 12,
+      "fn": 12,
+      "tn": 192,
+      "accuracy": 0.92,
+      "precision": 0.875,
+      "recall": 0.875,
+      "f1": 0.875,
+      "precision_at_5": 1.0,
+      "precision_at_10": 1.0,
+      "precision_at_25": 0.96,
+      "ece": 0.0529,
+      "bins": [
+        {
+          "bin": "0.0-0.1",
+          "n": 156,
+          "confidence": 0.0147,
+          "accuracy": 0.0385,
+          "gap": 0.0238
+        },
+        {
+          "bin": "0.1-0.2",
+          "n": 17,
+          "confidence": 0.1446,
+          "accuracy": 0.1176,
+          "gap": 0.027
+        },
+        {
+          "bin": "0.2-0.3",
+          "n": 12,
+          "confidence": 0.2528,
+          "accuracy": 0.0,
+          "gap": 0.2528
+        },
+        {
+          "bin": "0.3-0.4",
+          "n": 12,
+          "confidence": 0.3234,
+          "accuracy": 0.1667,
+          "gap": 0.1568
+        },
+        {
+          "bin": "0.4-0.5",
+          "n": 7,
+          "confidence": 0.4539,
+          "accuracy": 0.2857,
+          "gap": 0.1681
+        },
+        {
+          "bin": "0.5-0.6",
+          "n": 5,
+          "confidence": 0.5573,
+          "accuracy": 0.8,
+          "gap": 0.2427
+        },
+        {
+          "bin": "0.6-0.7",
+          "n": 4,
+          "confidence": 0.6194,
+          "accuracy": 0.75,
+          "gap": 0.1306
+        },
+        {
+          "bin": "0.7-0.8",
+          "n": 12,
+          "confidence": 0.7609,
+          "accuracy": 0.75,
+          "gap": 0.0109
+        },
+        {
+          "bin": "0.8-0.9",
+          "n": 16,
+          "confidence": 0.8583,
+          "accuracy": 0.8125,
+          "gap": 0.0458
+        },
+        {
+          "bin": "0.9-1.0",
+          "n": 59,
+          "confidence": 0.9833,
+          "accuracy": 0.9322,
+          "gap": 0.0511
+        }
+      ],
+      "latency": {
+        "mean_s": 0.0357,
+        "p50_s": 0.0304,
+        "p95_s": 0.0659,
+        "max_s": 0.0808,
+        "n": 300
+      }
+    },
+    "Jev (typesafe api, jev-latest)": {
+      "n": 300,
+      "threshold": 0.5,
+      "tp": 41,
+      "fp": 3,
+      "fn": 55,
+      "tn": 201,
+      "accuracy": 0.8066666666666666,
+      "precision": 0.9318181818181818,
+      "recall": 0.4270833333333333,
+      "f1": 0.5857142857142857,
+      "precision_at_5": 1.0,
+      "precision_at_10": 1.0,
+      "precision_at_25": 1.0,
+      "ece": 0.0697,
+      "bins": [
+        {
+          "bin": "0.0-0.1",
+          "n": 56,
+          "confidence": 0.0711,
+          "accuracy": 0.0357,
+          "gap": 0.0354
+        },
+        {
+          "bin": "0.1-0.2",
+          "n": 103,
+          "confidence": 0.142,
+          "accuracy": 0.1456,
+          "gap": 0.0036
+        },
+        {
+          "bin": "0.2-0.3",
+          "n": 56,
+          "confidence": 0.2455,
+          "accuracy": 0.3214,
+          "gap": 0.0759
+        },
+        {
+          "bin": "0.3-0.4",
+          "n": 19,
+          "confidence": 0.3342,
+          "accuracy": 0.3684,
+          "gap": 0.0342
+        },
+        {
+          "bin": "0.4-0.5",
+          "n": 22,
+          "confidence": 0.4423,
+          "accuracy": 0.5909,
+          "gap": 0.1486
+        },
+        {
+          "bin": "0.5-0.6",
+          "n": 15,
+          "confidence": 0.5447,
+          "accuracy": 0.8667,
+          "gap": 0.322
+        },
+        {
+          "bin": "0.6-0.7",
+          "n": 8,
+          "confidence": 0.6412,
+          "accuracy": 0.875,
+          "gap": 0.2338
+        },
+        {
+          "bin": "0.7-0.8",
+          "n": 7,
+          "confidence": 0.7571,
+          "accuracy": 1.0,
+          "gap": 0.2429
+        },
+        {
+          "bin": "0.8-0.9",
+          "n": 14,
+          "confidence": 0.8571,
+          "accuracy": 1.0,
+          "gap": 0.1429
+        }
+      ],
+      "latency": {
+        "mean_s": 0.8694,
+        "p50_s": 0.8645,
+        "p95_s": 0.9104,
+        "max_s": 1.0845,
+        "n": 300
+      }
+    }
+  }
+}

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 from datetime import date
@@ -54,6 +55,15 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=300, help="stratified eval sample size")
     ap.add_argument("--out", default="reports")
     args = ap.parse_args()
+
+    # load .env (JEV_KEY etc.) — stdlib, no dotenv dependency
+    env_file = REPO_ROOT / ".env"
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, _, v = line.partition("=")
+                os.environ.setdefault(k.strip(), v.strip())
 
     cfg = json.loads((REPO_ROOT / args.config).read_text(encoding="utf-8"))
 
