@@ -48,6 +48,23 @@ def precision_at_k(scores: Sequence[float], labels: Sequence[bool], k: int) -> f
     return hits / k
 
 
+def roc_auc(scores: Sequence[float], labels: Sequence[bool]) -> float | None:
+    """Rank-based AUC (Mann-Whitney U). Handles ties via average ranks."""
+    pos = [s for s, y in zip(scores, labels) if y]
+    neg = [s for s, y in zip(scores, labels) if not y]
+    if not pos or not neg:
+        return None
+    ranked = sorted(scores)
+    # average rank (1-based) with ties
+    def avg_rank(v: float) -> float:
+        lo = ranked.index(v)  # first occurrence
+        hi = len(ranked) - 1 - ranked[::-1].index(v)  # last occurrence
+        return (lo + hi) / 2 + 1
+    rank_sum = sum(avg_rank(s) for s in pos)
+    n_pos, n_neg = len(pos), len(neg)
+    return (rank_sum - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)
+
+
 def expected_calibration_error(
     scores: Sequence[float], labels: Sequence[bool], bins: int = 10
 ) -> dict:

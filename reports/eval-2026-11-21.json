@@ -1,0 +1,209 @@
+{
+  "date": "2026-11-21",
+  "dataset": "labeled_full_7866.jsonl",
+  "n": 300,
+  "n_intent": 96,
+  "methodology": {
+    "split_reproduction": "train.py 同款三路分层切分（seed=7）还原 held-out test 集",
+    "sampling": "test 集内确定性分层抽样 300 条（rng seed=20261119）",
+    "reference": "teacher 标签（Gemini 2.5 Flash）；teacher 人工一致率约 90%（50 条审计）",
+    "threshold": 0.5,
+    "latency": "sidecar 为服务端 per-item 计时；Jev 为客户端逐请求计时（含网络）",
+    "jev_protocol": {
+      "endpoint": "POST https://api.typesafe.ai/v1/systemone",
+      "model": "jev-latest（实际服务版本见 raw.served_model，当前 jev-1.14.0）",
+      "question": "Does this X post express buying intent for a product, tool, app or service?",
+      "criteria_true": "the author is looking to buy, adopt, or pay for a product, tool, app or service",
+      "criteria_false": "content consumption, chatter, praise, or news with no purchase intent",
+      "polarity_check": "强意向帖 0.93 / 噪音帖 0.08（noul = P(buy-intent=true)，极性正确）",
+      "mode": "单条逐请求，无批处理"
+    }
+  },
+  "models": {
+    "lead-miner head (bge-base, 49k, local)": {
+      "n": 300,
+      "threshold": 0.5,
+      "tp": 84,
+      "fp": 12,
+      "fn": 12,
+      "tn": 192,
+      "accuracy": 0.92,
+      "precision": 0.875,
+      "recall": 0.875,
+      "f1": 0.875,
+      "precision_at_5": 1.0,
+      "precision_at_10": 1.0,
+      "precision_at_25": 0.96,
+      "ece": 0.0529,
+      "bins": [
+        {
+          "bin": "0.0-0.1",
+          "n": 156,
+          "confidence": 0.0147,
+          "accuracy": 0.0385,
+          "gap": 0.0238
+        },
+        {
+          "bin": "0.1-0.2",
+          "n": 17,
+          "confidence": 0.1446,
+          "accuracy": 0.1176,
+          "gap": 0.027
+        },
+        {
+          "bin": "0.2-0.3",
+          "n": 12,
+          "confidence": 0.2528,
+          "accuracy": 0.0,
+          "gap": 0.2528
+        },
+        {
+          "bin": "0.3-0.4",
+          "n": 12,
+          "confidence": 0.3234,
+          "accuracy": 0.1667,
+          "gap": 0.1568
+        },
+        {
+          "bin": "0.4-0.5",
+          "n": 7,
+          "confidence": 0.4539,
+          "accuracy": 0.2857,
+          "gap": 0.1681
+        },
+        {
+          "bin": "0.5-0.6",
+          "n": 5,
+          "confidence": 0.5573,
+          "accuracy": 0.8,
+          "gap": 0.2427
+        },
+        {
+          "bin": "0.6-0.7",
+          "n": 4,
+          "confidence": 0.6194,
+          "accuracy": 0.75,
+          "gap": 0.1306
+        },
+        {
+          "bin": "0.7-0.8",
+          "n": 12,
+          "confidence": 0.7609,
+          "accuracy": 0.75,
+          "gap": 0.0109
+        },
+        {
+          "bin": "0.8-0.9",
+          "n": 16,
+          "confidence": 0.8583,
+          "accuracy": 0.8125,
+          "gap": 0.0458
+        },
+        {
+          "bin": "0.9-1.0",
+          "n": 59,
+          "confidence": 0.9833,
+          "accuracy": 0.9322,
+          "gap": 0.0511
+        }
+      ],
+      "latency": {
+        "mean_s": 0.0379,
+        "p50_s": 0.0331,
+        "p95_s": 0.0655,
+        "max_s": 0.0917,
+        "n": 300
+      },
+      "roc_auc": 0.9517207924836601
+    },
+    "Jev (typesafe api, jev-latest)": {
+      "n": 300,
+      "threshold": 0.5,
+      "tp": 41,
+      "fp": 5,
+      "fn": 55,
+      "tn": 199,
+      "accuracy": 0.8,
+      "precision": 0.8913043478260869,
+      "recall": 0.4270833333333333,
+      "f1": 0.5774647887323944,
+      "precision_at_5": 1.0,
+      "precision_at_10": 1.0,
+      "precision_at_25": 1.0,
+      "ece": 0.088,
+      "bins": [
+        {
+          "bin": "0.0-0.1",
+          "n": 58,
+          "confidence": 0.0719,
+          "accuracy": 0.0345,
+          "gap": 0.0374
+        },
+        {
+          "bin": "0.1-0.2",
+          "n": 102,
+          "confidence": 0.1429,
+          "accuracy": 0.1275,
+          "gap": 0.0155
+        },
+        {
+          "bin": "0.2-0.3",
+          "n": 51,
+          "confidence": 0.241,
+          "accuracy": 0.3922,
+          "gap": 0.1512
+        },
+        {
+          "bin": "0.3-0.4",
+          "n": 24,
+          "confidence": 0.3308,
+          "accuracy": 0.2917,
+          "gap": 0.0392
+        },
+        {
+          "bin": "0.4-0.5",
+          "n": 19,
+          "confidence": 0.4411,
+          "accuracy": 0.6842,
+          "gap": 0.2432
+        },
+        {
+          "bin": "0.5-0.6",
+          "n": 14,
+          "confidence": 0.53,
+          "accuracy": 0.7143,
+          "gap": 0.1843
+        },
+        {
+          "bin": "0.6-0.7",
+          "n": 12,
+          "confidence": 0.6408,
+          "accuracy": 0.9167,
+          "gap": 0.2758
+        },
+        {
+          "bin": "0.7-0.8",
+          "n": 6,
+          "confidence": 0.765,
+          "accuracy": 1.0,
+          "gap": 0.235
+        },
+        {
+          "bin": "0.8-0.9",
+          "n": 14,
+          "confidence": 0.8507,
+          "accuracy": 1.0,
+          "gap": 0.1493
+        }
+      ],
+      "latency": {
+        "mean_s": 0.8824,
+        "p50_s": 0.8732,
+        "p95_s": 0.9572,
+        "max_s": 1.0909,
+        "n": 300
+      },
+      "roc_auc": 0.8604728349673203
+    }
+  }
+}

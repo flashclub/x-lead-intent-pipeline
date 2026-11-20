@@ -27,7 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from eval.adapters import load_adapters
-from eval.metrics import evaluate_run
+from eval.metrics import evaluate_run, roc_auc
 
 
 def stratified_split_3way(
@@ -112,7 +112,28 @@ def main() -> None:
         "dataset": Path(args.dataset).name,
         "n": len(sample_texts),
         "n_intent": pos,
+        "methodology": {
+            "split_reproduction": "train.py 同款三路分层切分（seed=7）还原 held-out test 集",
+            "sampling": f"test 集内确定性分层抽样 {len(sample_texts)} 条（rng seed=20261119）",
+            "reference": "teacher 标签（Gemini 2.5 Flash）；teacher 人工一致率约 90%（50 条审计）",
+            "threshold": 0.5,
+            "latency": "sidecar 为服务端 per-item 计时；Jev 为客户端逐请求计时（含网络）",
+            "jev_protocol": {
+                "endpoint": "POST https://api.typesafe.ai/v1/systemone",
+                "model": "jev-latest（实际服务版本见 raw.served_model，当前 jev-1.14.0）",
+                "question": "Does this X post express buying intent for a product, tool, app or service?",
+                "criteria_true": "the author is looking to buy, adopt, or pay for a product, tool, app or service",
+                "criteria_false": "content consumption, chatter, praise, or news with no purchase intent",
+                "polarity_check": "强意向帖 0.93 / 噪音帖 0.08（noul = P(buy-intent=true)，极性正确）",
+                "mode": "单条逐请求，无批处理",
+            },
+        },
         "models": {},
+    }
+    per_sample: dict = {
+        "index": picked,
+        "text": sample_texts,
+        "teacher_label": sample_labels,
     }
     out_dir = REPO_ROOT / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -130,7 +151,10 @@ def main() -> None:
             report["models"][name] = {"error": f"score count mismatch ({len(batch.scores)})"}
             continue
         m = evaluate_run(batch.scores, sample_labels, batch.latencies)
+        m["roc_auc"] = roc_auc(batch.scores, sample_labels)
         report["models"][name] = m
+        per_sample[f"score: {name}"] = [round(v, 4) for v in batch.scores]
+        per_sample[f"latency_s: {name}"] = [round(v, 4) for v in batch.latencies]
         lat = m.get("latency", {})
         print(
             f"  acc={m['accuracy']} p@5={m.get('precision_at_5')} p@10={m.get('precision_at_10')} "
@@ -140,6 +164,48 @@ def main() -> None:
     (out_dir / f"eval-{date.today().isoformat()}.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
     )
+
+    # ── 逐条明细 CSV ──
+    import csv
+    names = list(report["models"].keys())
+    scored = [n for n in names if "error" not in report["models"][n]]
+    if scored:
+        cols = ["index", "teacher_label", "text"]
+        for n in scored:
+            cols += [f"score: {n}", f"pred(0.5): {n}", f"correct: {n}", f"latency_s: {n}"]
+        csv_path = out_dir / f"eval-{date.today().isoformat()}-samples.csv"
+        with csv_path.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            w.writerow(cols)
+            for i in range(len(sample_texts)):
+                row = [picked[i], int(sample_labels[i]), sample_texts[i].replace("\n", " ")]
+                for n in scored:
+                    sc = per_sample[f"score: {n}"][i]
+                    pred = sc >= 0.5
+                    row += [sc, int(pred), int(pred == sample_labels[i]), per_sample[f"latency_s: {n}"][i]]
+                w.writerow(row)
+
+    # ── 分歧分析：两模型预测不一致的样本 ──
+    disagreement_lines: list[str] = []
+    if len(scored) >= 2:
+        a, b = scored[0], scored[1]
+        pa = [per_sample[f"score: {n}"][i] >= 0.5 for i, n in [(i, a) for i in range(len(sample_texts))]]
+        pb = [per_sample[f"score: {n}"][i] >= 0.5 for i, n in [(i, b) for i in range(len(sample_texts))]]
+        n_dis = sum(1 for x, y in zip(pa, pb) if x != y)
+        report["disagreement"] = {"models": [a, b], "n": n_dis,
+                                  "pct": round(n_dis / len(sample_texts), 3)}
+        if n_dis:
+            disagreement_lines.append(f"### 分歧样本（{a} vs {b}，共 {n_dis} 条）\n")
+            for i in range(len(sample_texts)):
+                if pa[i] != pb[i]:
+                    ok_a = per_sample[f"score: {a}"][i] >= 0.5 == sample_labels[i]
+                    ok_b = per_sample[f"score: {b}"][i] >= 0.5 == sample_labels[i]
+                    winner = a if ok_a and not ok_b else (b if ok_b and not ok_a else "平手/双错")
+                    t = sample_texts[i].replace("\n", " ")[:80]
+                    disagreement_lines.append(
+                        f"- [{winner}] ours={per_sample[f'score: {a}'][i]:.2f} "
+                        f"jev={per_sample[f'score: {b}'][i]:.2f} teacher={int(sample_labels[i])} ｜ {t}"
+                    )
 
     lines = [
         f"# 评测报告 {date.today().isoformat()}",
@@ -163,7 +229,20 @@ def main() -> None:
         "",
         "> 口径说明：所有 accuracy/precision 均为 **teacher 一致率**"
         "（teacher 人工一致率约 90%，见 docs/jev-research-2026-11-19.md §5.3），非 ground truth。",
+        "",
+        "## 测试方法",
+        "",
+        f"- **数据**：{report['dataset']}（7,866 条全量标注），按 train.py 同款三路分层切分（seed=7）还原 held-out test 集，再确定性分层抽样 {len(sample_texts)} 条（{report['n_intent']} 意向 / {report['n'] - report['n_intent']} 噪音，rng seed=20261119）",
+        "- **参考基准**：teacher 标签（Gemini 2.5 Flash）；teacher 对人工判断一致率约 90%（50 条审计），故本报告所有百分比为 teacher 一致率",
+        "- **判定阈值**：0.5；指标含混淆矩阵、precision/recall/F1、ROC-AUC、ECE（10 桶校准）、precision@5/10/25",
+        "- **延迟口径**：sidecar = 服务端 per-item 计时；Jev = 客户端逐请求计时（含网络往返）",
+        "- **Jev 接入**：POST api.typesafe.ai/v1/systemone（System One 协议，state + noul criteria），模型 jev-latest（实际 jev-1.14.0），单条逐请求；极性验证：强意向帖 0.93 / 噪音帖 0.08",
+        "",
+        "## 逐条明细",
+        "",
+        f"完整 300 条 × 每模型（score/pred/correct/latency）见 `eval-{date.today().isoformat()}-samples.csv`（与本报告同目录）。",
     ]
+    lines += disagreement_lines
     (out_dir / f"eval-{date.today().isoformat()}.md").write_text("\n".join(lines), encoding="utf-8")
     print(f"report: {out_dir}/eval-{date.today().isoformat()}.md")
 
