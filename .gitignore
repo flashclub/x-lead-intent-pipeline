@@ -5,3 +5,17 @@ data/posts_10k.jsonl
 !data/labeled_full_7866.jsonl
 data/labeled.jsonl
 data/labeled_10k.jsonl
+
+# ==========================================
+# 3. Environment Variables & Secrets
+# ==========================================
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.local.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+.DS_Store
