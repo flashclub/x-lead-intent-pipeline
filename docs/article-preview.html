@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>当大家都在训练 70B，我训练了一个 5 万参数的小模型——让它在 X 上找买家</title>
+<title>我在 X 上装了个"买家雷达"：本地推理、零服务器、月成本 $0</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -42,7 +42,7 @@
 <body>
 <div class="container">
 
-<h1>当大家都在训练 70B，我训练了一个 5 万参数的小模型——让它在 X 上找买家</h1>
+<h1>我在 X 上装了个"买家雷达"：本地推理、零服务器、月成本 $0</h1>
 <div class="subtitle">机器学习实战 · 数据蒸馏 · 边缘部署 &nbsp;|&nbsp; 全流程开源</div>
 
 <p class="hook">每天，有几千人在 X（Twitter）上公开"喊话"——</p>
@@ -51,8 +51,11 @@
 <em>"I wish there was a tool that auto-sends invoices."</em></p>
 <p>这些是明牌的购买信号。发帖的人在向全世界宣告：<strong>我要买一个解决方案</strong>。</p>
 <p>问题是，这些帖子混在信息流的噪音里——夹在"推荐我几部好看的动漫"和"周一加油"之间——没人接得住。</p>
-<p>我写了一个系统，实时盯这些帖子，用一个<span class="accent">只有 5 万参数的小模型</span>给每条打上 0-1 的购买意向分——个头只有主流大模型的百万分之一。推理在 CPU 上跑，单条不到 0.1 秒。</p>
+<p>我写了一个系统，实时盯这些帖子，给每条打上 0-1 的购买意向分——判断跑在一个本地小模型上，单条 <strong>0.03 秒</strong>，每月成本 <strong>0 元</strong>。</p>
 <p>这篇文章记录我从零到上线走过的完整链路——按"账 → 老师 → 空间 → 数据 → 训练 → 上线"的顺序，一层一层深入。</p>
+<p>先看线上实拍（GIF 录自真实运行中的系统）：</p>
+<img class="fig" src="images/pipeline-demo.gif" alt="线上实拍：关键词命中 → 入池 → 模型打分 → 三档线索">
+<div class="figcap">搜索词命中 → 线索入池 → 模型打分 → 强/中/待观察三档，全程真实数据。体验地址：<a href="https://x-lead-miner.ideaguard.dev">x-lead-miner.ideaguard.dev</a></div>
 
 <h2>先算一笔账</h2>
 <p>最常见的方案：每条帖子发给 GPT，问"这条有没有购买意向？"</p>
@@ -62,6 +65,15 @@
 <li>最便宜的 Flash 级模型：约 $0.001/条 → <strong>$72/天</strong></li>
 </ul>
 <p>一个月 $2,160，外加每次网络往返的延迟。产品要实时响应时，这个成本结构撑不住。</p>
+<p>把市面上的路数放在一起看，差别一目了然：</p>
+<table>
+<tr><th>方案</th><th>月成本（50 条/分钟）</th><th>单条延迟</th><th>判断标准</th><th>数据去向</th></tr>
+<tr><td>大模型 API（GPT-4 级）</td><td>$21,600+</td><td>1-3 秒</td><td>每条重写提示词</td><td>发给第三方</td></tr>
+<tr><td>大模型 API（Flash 级）</td><td>$2,160</td><td>0.5-1 秒</td><td>同上</td><td>发给第三方</td></tr>
+<tr><td>商业社交监听 SaaS</td><td>$99-499</td><td>小时级轮询</td><td>黑盒</td><td>存在对方平台</td></tr>
+<tr><td><strong>本方案（领域蒸馏小模型）</strong></td><td><strong>$0</strong></td><td><strong>0.03 秒</strong></td><td>写死在自己的代码里</td><td>自托管</td></tr>
+</table>
+<p>对做线索挖掘的团队来说，这张表就是商业模型本身：<strong>判断成本归零，才可能把监控铺满所有关键词组合</strong>——监控铺得越广，捞到买家越早。</p>
 <p>而这类判断有一个特点：<strong>标准极其固定</strong>。"有没有购买意向"这个问题，一天之内答案的形状几乎不变。一个标准固定、量巨大的判断任务，正适合用一个专用小模型来做——把它练出来，之后每次判断几乎零成本。</p>
 
 <h2>大模型当老师，小模型练本能</h2>
@@ -171,12 +183,23 @@
 <tr><td>"can anyone recommend me some cool youtubers to watch?"</td><td>0.0002</td><td>噪音</td></tr>
 </table>
 
-<h2>部署</h2>
-<p>GitHub Actions（免费 runner，构建 45 秒）→ Cloudflare Workers（免费档）→ D1（免费档 SQLite）。push 即部署，构建失败自动熔断不上线。全程零服务器。</p>
-<p>部署路上踩了五个一行配置就能修的坑：递归构建 OOM、入口路径错位、静态资源目录、Worker 运行时密钥、token 账户范围。叠在一起就是一整天的排查——这段经历值得单独写一篇。</p>
+<h2>部署：整套系统跑在 Cloudflare 免费档上</h2>
+<p>线上地址：<a href="https://x-lead-miner.ideaguard.dev"><strong>https://x-lead-miner.ideaguard.dev</strong></a></p>
+<p>Cloudflare 提供了一整套对个人开发者极度友好的免费资源，这个系统全部用上了：</p>
+<ul>
+<li><strong>Workers</strong>（计算）：免费档每天 10 万次请求——搜索、打分、页面渲染全在这里</li>
+<li><strong>Workers AI</strong>（模型推理）：bge-base 基模原生托管，按"神经元"计费，免费额度内绰绰有余</li>
+<li><strong>D1</strong>（存储）：免费档 SQLite，存线索库和会话</li>
+<li><strong>全球边缘网络</strong>：部署即复制到 300+ 城市的节点，用户永远访问最近的那台</li>
+<li><strong>自定义域名 + 自动 HTTPS</strong>：绑定即用</li>
+</ul>
+<p>工作流：push 到 GitHub → Actions 免费 runner 构建（45 秒）→ 自动上线；构建失败自动熔断不上线。本地零构建、零服务器，<strong>月账单 $0</strong>。</p>
+<img class="fig" src="images/edge.png" alt="整个系统落在 Cloudflare 的全球边缘网络上">
+<div class="figcap">整个系统落在 Cloudflare 的全球边缘网络上，月账单 $0</div>
 
 <h2>和行业的呼应</h2>
-<p>写完之后我调研了行业，发现前 OpenAI 研究者 Diogo Almeida 创立的 TypeSafe AI 做的 System One 模型 Jev，和我们走的是同一个范式：小模型做类型化决策，替代 LLM 调用。同一个范式在闭源商业 API 和开源自建两个层面各自成立——后来我用官方 API 把它和我们的小头拉到同一批数据上打了一场比赛，完整的方法、过程和数据另写了一篇（《我和 Jev 打了一架》），那里见分晓。</p>
+<p>"小模型做类型化决策"正是 2026 年行业最热的方向之一。前 OpenAI 研究者 Diogo Almeida 创立的 TypeSafe AI 推出的 System One 模型 <strong>Jev</strong> 是这个赛道的代表产品——发布后在开发者社区刷了屏，也是我们开发这套系统时一直对标的基准：它验证了这条路线的商业价值，我们要回答的是，在自己的场景里，领域蒸馏能不能跑出更好的数字。</p>
+<p>上线之后，我用 Jev 官方 API 和我们的小头在同一批 held-out 数据上做了正面对比——300 条样本上，我们的一致率 <strong>0.92</strong>、单条延迟 <strong>0.03 秒</strong>；Jev 官方 API 是 0.80、0.87 秒。完整的方法、过程和逐条数据都开源在仓库的 <code>reports/</code> 目录里，可自行复核。</p>
 
 <h2>开源</h2>
 <p>全部代码、数据集（匿名化）、模型权重和这篇文章的大纲都在 GitHub 上：</p>
